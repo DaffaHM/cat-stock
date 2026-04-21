@@ -33,34 +33,68 @@ const DashboardPage = () => {
   const fetchTodaySales = async () => {
     try {
       const today = new Date().toISOString().split('T')[0]
+      console.log('📊 DashboardPage: Fetching today sales for:', today)
       
-      // Fetch today's sales details
+      // Fetch today's sales directly from sales table with stock info
       const { data: salesData, error: salesError } = await supabase
-        .from('daily_sales_detail')
-        .select('*')
+        .from('sales')
+        .select(`
+          *,
+          stocks (
+            brand,
+            nama_produk,
+            warna,
+            kode_warna,
+            kemasan
+          )
+        `)
         .eq('tanggal_jual', today)
         .order('created_at', { ascending: false })
 
+      console.log('🛒 DashboardPage sales data:', { salesData, salesError })
+
       if (salesError) {
-        console.error('Error fetching today sales:', salesError)
+        console.error('❌ Error fetching today sales:', salesError)
+        setTodaySales([])
+        setTodaySummary(null)
       } else {
         setTodaySales(salesData || [])
-      }
-
-      // Fetch today's summary
-      const { data: summaryData, error: summaryError } = await supabase
-        .from('daily_profit_report')
-        .select('*')
-        .eq('tanggal_jual', today)
-        .single()
-
-      if (summaryError && summaryError.code !== 'PGRST116') {
-        console.error('Error fetching today summary:', summaryError)
-      } else {
-        setTodaySummary(summaryData)
+        
+        // Calculate summary from sales data
+        if (salesData && salesData.length > 0) {
+          let totalPenjualan = 0
+          let totalKeuntungan = 0
+          let totalTransaksi = salesData.length
+          let totalUnit = 0
+          
+          salesData.forEach(sale => {
+            const saleTotal = sale.jumlah_terjual * sale.harga_jual_saat_itu
+            const saleProfit = sale.jumlah_terjual * (sale.harga_jual_saat_itu - sale.harga_beli_saat_itu)
+            
+            totalPenjualan += saleTotal
+            totalKeuntungan += saleProfit
+            totalUnit += sale.jumlah_terjual
+          })
+          
+          const calculatedSummary = {
+            tanggal_jual: today,
+            total_penjualan: totalPenjualan,
+            total_keuntungan: totalKeuntungan,
+            jumlah_transaksi: totalTransaksi,
+            total_unit_terjual: totalUnit
+          }
+          
+          console.log('📈 DashboardPage calculated summary:', calculatedSummary)
+          setTodaySummary(calculatedSummary)
+        } else {
+          console.log('📭 No sales data found for today')
+          setTodaySummary(null)
+        }
       }
     } catch (error) {
-      console.error('Error fetching today sales:', error)
+      console.error('💥 Error fetching today sales:', error)
+      setTodaySales([])
+      setTodaySummary(null)
     }
   }
 
@@ -158,13 +192,13 @@ const DashboardPage = () => {
               <p className="text-gray-600 text-sm">Barang yang terjual hari ini</p>
             </div>
           </div>
-          {todaySummary ? (
+          {todaySummary && todaySummary.jumlah_transaksi > 0 ? (
             <div className="text-right">
               <p className="text-2xl font-bold text-green-600">
                 {formatRupiah(todaySummary.total_keuntungan)}
               </p>
               <p className="text-sm text-gray-500">
-                {todaySummary.total_transaksi} transaksi • {todaySummary.total_unit_terjual} unit
+                {todaySummary.jumlah_transaksi} transaksi • {todaySummary.total_unit_terjual} unit
               </p>
             </div>
           ) : (
@@ -184,15 +218,15 @@ const DashboardPage = () => {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 text-sm">
-                        {sale.brand} - {sale.nama_produk}
+                        {sale.stocks?.brand} - {sale.stocks?.nama_produk}
                       </h3>
                       <p className="text-xs text-gray-600 mt-1">
-                        {sale.kemasan} • {sale.warna}
+                        {sale.stocks?.kemasan} • {sale.stocks?.warna}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-green-600">
-                        {formatRupiah(sale.keuntungan)}
+                        {formatRupiah(sale.jumlah_terjual * (sale.harga_jual_saat_itu - sale.harga_beli_saat_itu))}
                       </p>
                     </div>
                   </div>
@@ -204,7 +238,7 @@ const DashboardPage = () => {
                     </div>
                     <div className="bg-white rounded-lg p-2">
                       <p className="text-gray-500">Total</p>
-                      <p className="font-semibold text-blue-600">{formatRupiah(sale.total_penjualan)}</p>
+                      <p className="font-semibold text-blue-600">{formatRupiah(sale.jumlah_terjual * sale.harga_jual_saat_itu)}</p>
                     </div>
                   </div>
                   
