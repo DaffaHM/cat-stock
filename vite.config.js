@@ -7,4 +7,11 @@ export default defineConfig({
   build: {
     cssMinify: false, // Disable CSS minification to avoid build issues
   },
+  server: {
+    port: 3000,
+    open: true
+  },
+  preview: {
+    port: 3000
+  }
 })

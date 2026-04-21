@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -47,31 +47,88 @@ function App() {
           path="/login" 
           element={
             authenticated ? (
-              <DashboardPage />
+              <Navigate to="/" replace />
             ) : (
               <LoginPage onLogin={handleLogin} />
             )
           } 
         />
         
-        {/* Protected Routes */}
-        <Route path="/*" element={
+        {/* Protected Routes with Layout */}
+        <Route path="/" element={
           <ProtectedRoute>
             <Layout>
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/stock-management" element={<StockManagementPage />} />
-                <Route path="/add-product" element={<AddProductPage />} />
-                <Route path="/edit-product/:id" element={<EditProductPage />} />
-                <Route path="/restock/:id" element={<RestockPage />} />
-                <Route path="/delete-product/:id" element={<DeleteProductPage />} />
-                <Route path="/sales" element={<SalesPage />} />
-                <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/panduan" element={<PanduanPage />} />
-              </Routes>
+              <DashboardPage />
             </Layout>
           </ProtectedRoute>
         } />
+        
+        <Route path="/stock-management" element={
+          <ProtectedRoute>
+            <Layout>
+              <StockManagementPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/add-product" element={
+          <ProtectedRoute>
+            <Layout>
+              <AddProductPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/edit-product/:id" element={
+          <ProtectedRoute>
+            <Layout>
+              <EditProductPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/restock/:id" element={
+          <ProtectedRoute>
+            <Layout>
+              <RestockPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/delete-product/:id" element={
+          <ProtectedRoute>
+            <Layout>
+              <DeleteProductPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/sales" element={
+          <ProtectedRoute>
+            <Layout>
+              <SalesPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/reports" element={
+          <ProtectedRoute>
+            <Layout>
+              <ReportsPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/panduan" element={
+          <ProtectedRoute>
+            <Layout>
+              <PanduanPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+
+        {/* Catch all route - redirect to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   )
