@@ -24,17 +24,27 @@ const SalesForm = ({ onSaleSuccess }) => {
   const fetchStocks = async () => {
     try {
       setLoading(true)
+      console.log('🔍 Fetching stocks for sales form...')
+      
       const { data, error } = await supabase
         .from('stocks')
         .select('*')
         .gt('stok', 0) // Only show products with stock > 0
         .order('nama_produk', { ascending: true })
 
-      if (error) throw error
+      console.log('📦 Stocks response:', { data, error })
+
+      if (error) {
+        console.error('❌ Error fetching stocks:', error)
+        throw error
+      }
+      
+      console.log(`✅ Found ${data?.length || 0} products with stock > 0`)
       setStocks(data || [])
     } catch (error) {
-      console.error('Error fetching stocks:', error)
-      showNotification('Error memuat data stok', 'error')
+      console.error('💥 Error fetching stocks:', error)
+      showNotification(`Error memuat data stok: ${error.message}`, 'error')
+      setStocks([])
     } finally {
       setLoading(false)
     }
@@ -86,32 +96,88 @@ const SalesForm = ({ onSaleSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    console.log('🛒 Starting sales submission...')
+    console.log('Selected stock:', selectedStock)
+    console.log('Form data:', formData)
+    
     if (!selectedStock) {
       showNotification('Pilih produk terlebih dahulu', 'error')
       return
     }
 
     const jumlah = parseInt(formData.jumlah_terjual)
+    if (isNaN(jumlah) || jumlah <= 0) {
+      showNotification('Jumlah terjual harus lebih dari 0', 'error')
+      return
+    }
+    
     if (jumlah > selectedStock.stok) {
       showNotification(`Stok tidak mencukupi. Stok tersedia: ${selectedStock.stok}`, 'error')
       return
     }
 
+    const hargaJual = parseFloat(formData.harga_jual_saat_itu)
+    const hargaBeli = parseFloat(formData.harga_beli_saat_itu)
+    
+    if (isNaN(hargaJual) || hargaJual <= 0) {
+      showNotification('Harga jual harus valid', 'error')
+      return
+    }
+    
+    if (isNaN(hargaBeli) || hargaBeli <= 0) {
+      showNotification('Harga beli harus valid', 'error')
+      return
+    }
+
     try {
       setSubmitting(true)
+      
+      const salesData = {
+        stock_id: selectedStock.id,
+        tanggal_jual: formData.tanggal_jual,
+        jumlah_terjual: jumlah,
+        harga_jual_saat_itu: hargaJual,
+        harga_beli_saat_itu: hargaBeli,
+        keterangan: formData.keterangan || ''
+      }
+      
+      console.log('💾 Inserting sales data:', salesData)
 
-      const { error } = await supabase
+      // Step 1: Insert sales record
+      const { data: salesResult, error: salesError } = await supabase
         .from('sales')
-        .insert([{
-          stock_id: selectedStock.id,
-          tanggal_jual: formData.tanggal_jual,
-          jumlah_terjual: parseInt(formData.jumlah_terjual),
-          harga_jual_saat_itu: parseFloat(formData.harga_jual_saat_itu),
-          harga_beli_saat_itu: parseFloat(formData.harga_beli_saat_itu),
-          keterangan: formData.keterangan
-        }])
+        .insert([salesData])
+        .select()
 
-      if (error) throw error
+      if (salesError) {
+        console.error('❌ Sales insert error:', salesError)
+        throw salesError
+      }
+      
+      console.log('✅ Sales inserted successfully:', salesResult)
+
+      // Step 2: Update stock quantity
+      const newStockQuantity = selectedStock.stok - jumlah
+      console.log(`📦 Updating stock: ${selectedStock.stok} - ${jumlah} = ${newStockQuantity}`)
+      
+      const { error: stockUpdateError } = await supabase
+        .from('stocks')
+        .update({ stok: newStockQuantity })
+        .eq('id', selectedStock.id)
+
+      if (stockUpdateError) {
+        console.error('❌ Stock update error:', stockUpdateError)
+        // Try to rollback sales insert if stock update fails
+        if (salesResult && salesResult[0]) {
+          await supabase
+            .from('sales')
+            .delete()
+            .eq('id', salesResult[0].id)
+        }
+        throw stockUpdateError
+      }
+      
+      console.log('✅ Stock updated successfully')
 
       showNotification('Penjualan berhasil dicatat!', 'success')
       
@@ -134,8 +200,8 @@ const SalesForm = ({ onSaleSuccess }) => {
       }
 
     } catch (error) {
-      console.error('Error saving sale:', error)
-      showNotification('Error menyimpan penjualan', 'error')
+      console.error('💥 Error saving sale:', error)
+      showNotification(`Error menyimpan penjualan: ${error.message}`, 'error')
     } finally {
       setSubmitting(false)
     }
