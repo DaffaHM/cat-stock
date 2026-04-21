@@ -16,65 +16,126 @@ const DailySummary = ({ refreshTrigger }) => {
   const fetchSummaryData = async () => {
     try {
       setLoading(true)
+      console.log('📊 Fetching daily summary data...')
       
-      // Fetch today's summary
-      const { data: todayData, error: todayError } = await supabase
-        .from('daily_profit_report')
-        .select('*')
-        .eq('tanggal_jual', new Date().toISOString().split('T')[0])
-        .single()
+      const today = new Date().toISOString().split('T')[0]
+      console.log('📅 Today date:', today)
+      
+      // Fetch today's sales directly from sales table with stock info
+      const { data: todaySalesData, error: salesError } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          stocks (
+            brand,
+            nama_produk,
+            warna,
+            kode_warna
+          )
+        `)
+        .eq('tanggal_jual', today)
+        .order('created_at', { ascending: false })
 
-      if (todayError && todayError.code !== 'PGRST116') {
-        console.error('Error fetching today summary:', todayError)
-      } else {
-        setTodaySummary(todayData)
+      console.log('🛒 Today sales data:', { todaySalesData, salesError })
+
+      if (salesError) {
+        console.error('❌ Error fetching today sales:', salesError)
+        throw salesError
       }
 
-      // Fetch week summary
+      // Calculate today's summary from sales data
+      let todayTotal = 0
+      let todayProfit = 0
+      let todayTransactions = 0
+
+      if (todaySalesData && todaySalesData.length > 0) {
+        todaySalesData.forEach(sale => {
+          const saleTotal = sale.jumlah_terjual * sale.harga_jual_saat_itu
+          const saleProfit = sale.jumlah_terjual * (sale.harga_jual_saat_itu - sale.harga_beli_saat_itu)
+          
+          todayTotal += saleTotal
+          todayProfit += saleProfit
+          todayTransactions += 1
+        })
+      }
+
+      const calculatedTodaySummary = {
+        tanggal_jual: today,
+        total_penjualan: todayTotal,
+        total_keuntungan: todayProfit,
+        jumlah_transaksi: todayTransactions
+      }
+
+      console.log('📈 Calculated today summary:', calculatedTodaySummary)
+      setTodaySummary(calculatedTodaySummary)
+      setTodayDetails(todaySalesData || [])
+
+      // Fetch week summary (last 7 days)
       const weekAgo = new Date()
       weekAgo.setDate(weekAgo.getDate() - 7)
       
-      const { data: weekData, error: weekError } = await supabase
-        .from('daily_profit_report')
-        .select('*')
+      const { data: weekSalesData, error: weekError } = await supabase
+        .from('sales')
+        .select('tanggal_jual, jumlah_terjual, harga_jual_saat_itu, harga_beli_saat_itu')
         .gte('tanggal_jual', weekAgo.toISOString().split('T')[0])
         .order('tanggal_jual', { ascending: false })
 
       if (weekError) {
-        console.error('Error fetching week summary:', weekError)
+        console.error('❌ Error fetching week sales:', weekError)
       } else {
-        setWeekSummary(weekData || [])
+        // Group by date and calculate daily totals
+        const weeklyData = {}
+        weekSalesData?.forEach(sale => {
+          const date = sale.tanggal_jual
+          if (!weeklyData[date]) {
+            weeklyData[date] = {
+              tanggal_jual: date,
+              total_penjualan: 0,
+              total_keuntungan: 0,
+              jumlah_transaksi: 0
+            }
+          }
+          
+          const saleTotal = sale.jumlah_terjual * sale.harga_jual_saat_itu
+          const saleProfit = sale.jumlah_terjual * (sale.harga_jual_saat_itu - sale.harga_beli_saat_itu)
+          
+          weeklyData[date].total_penjualan += saleTotal
+          weeklyData[date].total_keuntungan += saleProfit
+          weeklyData[date].jumlah_transaksi += 1
+        })
+        
+        setWeekSummary(Object.values(weeklyData))
       }
 
-      // Fetch top products (from today's sales)
-      const { data: topProductsData, error: topError } = await supabase
-        .from('daily_sales_detail')
-        .select('*')
-        .eq('tanggal_jual', new Date().toISOString().split('T')[0])
-        .order('keuntungan', { ascending: false })
-        .limit(5)
-
-      if (topError) {
-        console.error('Error fetching top products:', topError)
-      } else {
-        setTopProducts(topProductsData || [])
-      }
-
-      // Fetch all today's sales details
-      const { data: todayDetailsData, error: detailsError } = await supabase
-        .from('daily_sales_detail')
-        .select('*')
-        .eq('tanggal_jual', new Date().toISOString().split('T')[0])
-        .order('created_at', { ascending: false })
-
-      if (detailsError) {
-        console.error('Error fetching today details:', detailsError)
-      } else {
-        setTodayDetails(todayDetailsData || [])
-      }
+      // Calculate top products from today's sales
+      const productSummary = {}
+      todaySalesData?.forEach(sale => {
+        const productKey = `${sale.stocks?.brand} - ${sale.stocks?.nama_produk}`
+        if (!productSummary[productKey]) {
+          productSummary[productKey] = {
+            brand: sale.stocks?.brand || 'Unknown',
+            nama_produk: sale.stocks?.nama_produk || 'Unknown',
+            warna: sale.stocks?.warna || '',
+            total_terjual: 0,
+            total_penjualan: 0,
+            keuntungan: 0
+          }
+        }
+        
+        productSummary[productKey].total_terjual += sale.jumlah_terjual
+        productSummary[productKey].total_penjualan += sale.jumlah_terjual * sale.harga_jual_saat_itu
+        productSummary[productKey].keuntungan += sale.jumlah_terjual * (sale.harga_jual_saat_itu - sale.harga_beli_saat_itu)
+      })
+      
+      const topProductsArray = Object.values(productSummary)
+        .sort((a, b) => b.keuntungan - a.keuntungan)
+        .slice(0, 5)
+      
+      setTopProducts(topProductsArray)
+      console.log('🏆 Top products:', topProductsArray)
 
     } catch (error) {
-      console.error('Error fetching summary data:', error)
+      console.error('💥 Error fetching summary data:', error)
     } finally {
       setLoading(false)
     }
@@ -105,14 +166,16 @@ const DailySummary = ({ refreshTrigger }) => {
           Ringkasan Hari Ini
         </h2>
         
-        {todaySummary ? (
+        {todaySummary && todaySummary.jumlah_transaksi > 0 ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">{todaySummary.total_transaksi}</p>
+              <p className="text-2xl font-bold text-blue-600">{todaySummary.jumlah_transaksi}</p>
               <p className="text-sm text-gray-600">Transaksi</p>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <p className="text-2xl font-bold text-purple-600">{todaySummary.total_unit_terjual}</p>
+              <p className="text-2xl font-bold text-purple-600">
+                {todayDetails.reduce((sum, sale) => sum + sale.jumlah_terjual, 0)}
+              </p>
               <p className="text-sm text-gray-600">Unit Terjual</p>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
@@ -122,7 +185,6 @@ const DailySummary = ({ refreshTrigger }) => {
             <div className="text-center p-4 bg-yellow-50 rounded-lg">
               <p className="text-lg font-bold text-yellow-600">{formatRupiah(todaySummary.total_keuntungan)}</p>
               <p className="text-sm text-gray-600">Keuntungan</p>
-              <p className="text-xs text-gray-500 mt-1">({todaySummary.persentase_keuntungan}%)</p>
             </div>
           </div>
         ) : (
