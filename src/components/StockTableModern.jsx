@@ -1,6 +1,14 @@
 import { formatRupiah } from '../utils/formatCurrency'
 
 const StockTable = ({ stocks, loading, onEdit, onRestock, onDelete }) => {
+  // Debug logging
+  console.log('🏪 StockTable render:', { 
+    stocksLength: stocks?.length || 0, 
+    loading, 
+    stocksType: typeof stocks,
+    stocks: stocks 
+  })
+  
   // Fallback handlers to prevent errors
   const handleEdit = onEdit || ((stock) => console.log('Edit clicked:', stock))
   const handleRestock = onRestock || ((stock) => console.log('Restock clicked:', stock))

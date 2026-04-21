@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect } from 'react'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
+import ProductionDebug from './components/ProductionDebug'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import StockManagementPage from './pages/StockManagementPage'
@@ -130,6 +131,9 @@ function App() {
         {/* Catch all route - redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      
+      {/* Debug component - only shows in dev or with ?debug=true */}
+      <ProductionDebug />
     </Router>
   )
 }

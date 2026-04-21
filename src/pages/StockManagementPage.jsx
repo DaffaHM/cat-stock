@@ -20,15 +20,34 @@ const StockManagementPage = () => {
   const fetchStocks = async () => {
     try {
       setLoading(true)
+      console.log('🔍 Fetching stocks from Supabase...')
+      console.log('Environment:', import.meta.env.MODE)
+      console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL)
+      
       const { data, error } = await supabase
         .from('stocks')
         .select('*')
         .order('brand', { ascending: true })
 
-      if (error) throw error
+      console.log('📊 Supabase response:', { data, error })
+      
+      if (error) {
+        console.error('❌ Supabase error:', error)
+        // Show user-friendly error
+        alert(`Database Error: ${error.message}. Please check console for details.`)
+        throw error
+      }
+      
+      console.log('✅ Stocks fetched successfully:', data?.length || 0, 'records')
       setStocks(data || [])
     } catch (error) {
-      console.error('Error fetching stocks:', error)
+      console.error('💥 Error fetching stocks:', error)
+      // Show error to user in production
+      if (import.meta.env.PROD) {
+        alert(`Error loading data: ${error.message}`)
+      }
+      // Set empty array on error to prevent undefined issues
+      setStocks([])
     } finally {
       setLoading(false)
     }
